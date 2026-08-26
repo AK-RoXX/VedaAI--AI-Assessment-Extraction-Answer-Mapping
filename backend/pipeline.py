@@ -351,7 +351,7 @@ Return ONLY valid JSON format:
 """
 
 
-def _grade_single_question(dummy_client: Any, config: Any, q: Question, answer: Answer | None) -> GradingResult:
+def _grade_single_question(config: Any, q: Question, answer: Answer | None) -> GradingResult:
     if not answer or not answer.text.strip():
         return GradingResult(
             question_id=q.id,
@@ -414,7 +414,7 @@ async def grade_answers_async(
         loop = asyncio.get_event_loop()
 
         tasks = [
-            loop.run_in_executor(None, _grade_single_question, client, config, q, answer_map.get(q.id))
+            loop.run_in_executor(None, _grade_single_question, config, q, answer_map.get(q.id))
             for q in batch_q
         ]
         results = await asyncio.gather(*tasks)
