@@ -1,0 +1,161 @@
+.processingContainer {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 64px 32px;
+  gap: 20px;
+  background: var(--surface);
+  min-height: calc(100vh - 56px);
+}
+
+/* Sparkle */
+.sparkleWrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.starLarge {
+  animation: pulseLarge 2s ease-in-out infinite;
+  transform-origin: 60px 52px;
+}
+
+.starSmall1 {
+  animation: pulseSmall 2s ease-in-out infinite 0.3s;
+  transform-origin: 28px 32px;
+}
+
+.starSmall2 {
+  animation: pulseSmall 2s ease-in-out infinite 0.6s;
+  transform-origin: 92px 88px;
+}
+
+.dot1 { animation: blink 1.5s ease-in-out infinite 0.1s; }
+.dot2 { animation: blink 1.5s ease-in-out infinite 0.5s; }
+.dot3 { animation: blink 1.5s ease-in-out infinite 0.9s; }
+
+@keyframes pulseLarge {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.08); opacity: 0.9; }
+}
+
+@keyframes pulseSmall {
+  0%, 100% { transform: scale(1); opacity: 0.85; }
+  50% { transform: scale(1.15); opacity: 1; }
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; r: 3; }
+  50% { opacity: 0.3; r: 1.5; }
+}
+
+/* Text */
+.extractingTitle {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.3px;
+  text-align: center;
+}
+
+.extractingSubtitle {
+  font-size: 14px;
+  color: var(--text-secondary);
+  margin-top: -8px;
+  text-align: center;
+}
+
+/* Progress Section */
+.progressSection {
+  width: 360px;
+  max-width: 90vw;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.progressTrack {
+  width: 100%;
+  height: 8px;
+  background: var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+  position: relative;
+}
+
+.progressFill {
+  height: 100%;
+  background: linear-gradient(90deg, #e8500a, #f97316, #fb923c);
+  border-radius: 6px;
+  transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  box-shadow: 0 0 10px rgba(232, 80, 10, 0.4);
+}
+
+.progressStatusRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.stepLabel {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.percentLabel {
+  font-size: 13px;
+  font-weight: 700;
+  color: #e8500a;
+}
+
+/* Error state */
+.errorState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  text-align: center;
+}
+
+.errorIcon { font-size: 48px; }
+
+.errorTitle {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.errorMsg {
+  font-size: 14px;
+  color: var(--text-secondary);
+  max-width: 360px;
+}
+
+.retryBtn {
+  margin-top: 8px;
+  padding: 10px 24px;
+  background: #1a1a1a;
+  color: white;
+  border-radius: 24px;
+  font-size: 14px;
+  font-weight: 600;
+  transition: background 0.15s;
+}
+.retryBtn:hover { background: var(--accent); }
+
+/* Back button */
+.backBtn {
+  display: flex;
+  align-items: center;
+  padding: 6px;
+  border-radius: 6px;
+  color: var(--text-secondary);
+  transition: background 0.15s;
+}
+.backBtn:hover { background: var(--surface-2); color: var(--text-primary); }

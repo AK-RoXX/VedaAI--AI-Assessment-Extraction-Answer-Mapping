@@ -1,0 +1,174 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: #e2e8f0;
+  padding: 16px;
+  overflow: hidden;
+}
+
+/* Header */
+.header {
+  padding: 8px 4px 14px;
+  flex-shrink: 0;
+}
+
+.title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.titleSub {
+  font-size: 13px;
+  font-weight: 500;
+  color: #64748b;
+}
+
+/* List container */
+.list {
+  flex: 1;
+  overflow-y: auto;
+  padding-right: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Question Card */
+.card {
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 16px;
+  border: 2px solid transparent;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  border-color: #cbd5e1;
+}
+
+.cardSelected {
+  border-color: #e8500a !important;
+  box-shadow: 0 4px 14px rgba(232, 80, 10, 0.15) !important;
+}
+
+/* Top Row: Badge + Score + Chevron */
+.topRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.badge {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #475569;
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.badgeSelected {
+  background: #e8500a;
+}
+
+.topRight {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Score Pills */
+.scorePill {
+  font-size: 14px;
+  font-weight: 700;
+  padding: 4px 14px;
+  border-radius: 16px;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+}
+
+.scoreGreen {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+
+.scoreRed {
+  background: #ffebee;
+  color: #c62828;
+}
+
+.scoreAmber {
+  background: #fff8e1;
+  color: #f57f17;
+}
+
+/* Chevron Button */
+.chevronBtn {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: #f1f5f9;
+  color: #475569;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.2s, background 0.15s;
+}
+
+.chevronBtn:hover {
+  background: #e2e8f0;
+  color: #0f172a;
+}
+
+.chevronOpen {
+  transform: rotate(180deg);
+}
+
+/* Question Text */
+.questionText {
+  font-size: 14px;
+  font-weight: 500;
+  color: #1e293b;
+  line-height: 1.5;
+  margin-top: 12px;
+  word-break: break-word;
+}
+
+/* AI Feedback Card */
+.feedbackCard {
+  margin-top: 14px;
+  padding: 14px 16px;
+  background: #f8fafc;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  animation: fadeIn 0.2s ease-in-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.feedbackTitle {
+  font-size: 14px;
+  font-weight: 700;
+  color: #0f172a;
+  margin-bottom: 6px;
+}
+
+.feedbackBody {
+  font-size: 13px;
+  color: #334155;
+  line-height: 1.5;
+}
