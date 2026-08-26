@@ -131,16 +131,60 @@ def _pil_to_part(img: Image.Image) -> genai_types.Part:
     return genai_types.Part.from_bytes(data=buf.getvalue(), mime_type="image/jpeg")
 
 
-# ---------------------------------------------------------------------------
 def _clean_and_parse_json(raw: str) -> Any:
+    if not raw or not raw.strip():
+        return []
     raw = raw.strip()
-    match = re.search(r'(\[[\s\S]*\]|\{[\s\S]*\})', raw)
-    if match:
-        raw = match.group(1)
-    else:
-        raw = re.sub(r"^```[a-z]*\n?", "", raw, flags=re.IGNORECASE)
-        raw = re.sub(r"\n?```$", "", raw)
-        raw = raw.strip()
+
+    # 1. Clean markdown code fences
+    cleaned = re.sub(r'```(?:json)?|```', '', raw).strip()
+
+    # 2. Try direct parsing
+    try:
+        return json.loads(cleaned)
+    except Exception:
+        pass
+
+    # 3. Try outermost bracket slice
+    start_arr = cleaned.find('[')
+    end_arr = cleaned.rfind(']')
+    if start_arr != -1 and end_arr != -1 and end_arr > start_arr:
+        try:
+            return json.loads(cleaned[start_arr:end_arr + 1])
+        except Exception:
+            pass
+
+    start_obj = cleaned.find('{')
+    end_obj = cleaned.rfind('}')
+    if start_obj != -1 and end_obj != -1 and end_obj > start_obj:
+        try:
+            return json.loads(cleaned[start_obj:end_obj + 1])
+        except Exception:
+            pass
+
+    # 4. Multi-chunk raw_decode fallback (handles concatenated JSON streams)
+    decoder = json.JSONDecoder()
+    pos = 0
+    results = []
+    while pos < len(cleaned):
+        while pos < len(cleaned) and cleaned[pos] in " \t\r\n":
+            pos += 1
+        if pos >= len(cleaned):
+            break
+        try:
+            obj, end_idx = decoder.raw_decode(cleaned, pos)
+            if isinstance(obj, list):
+                results.extend(obj)
+            else:
+                results.append(obj)
+            pos = end_idx
+        except Exception:
+            pos += 1
+
+    if results:
+        return results
+
+    # Final fallback attempt
     return json.loads(raw)
 
 
