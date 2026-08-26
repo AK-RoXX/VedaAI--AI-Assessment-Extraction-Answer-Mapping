@@ -330,101 +330,114 @@ def map_answers_to_questions(
 
 
 # ---------------------------------------------------------------------------
-# Step 4: Parallelized Grading with Detailed Score Justification
+# Step 4: High-Speed Batch AI Grading with Detailed Marks Justification
 # ---------------------------------------------------------------------------
 
-GRADING_PROMPT_TEMPLATE = """
+BATCH_GRADING_PROMPT = """
 You are an experienced academic teacher grading student exam answers.
 
-Question ID: {question_id}
-Question Text: {question_text}
-Maximum Marks: {max_marks}
-Student's Answer: {answer_text}
+Analyze each student answer and grade it against its question text and maximum marks.
+Rules:
+1. marks_awarded must be an integer between 0 and max_marks.
+2. Provide concise, constructive feedback with a clear score justification explaining how many marks were awarded and why.
+   (e.g., "Awarded 2/2 marks: Correctly identified the organelle and described its primary function.")
+3. Return ONLY a valid JSON array of objects.
 
-Grade the student's answer accurately:
-1. Assign marks_awarded (integer, 0 to {max_marks}).
-2. Provide constructive feedback with a clear analysis explaining how many marks the student got and why.
-   (e.g., "Awarded 2/2 marks: Correctly identified photosynthesis organelle and described its primary pigments accurately.")
+Items to grade:
+{items_json}
 
-Return ONLY valid JSON format:
-{{"question_id": "{question_id}", "marks_awarded": <int>, "max_marks": {max_marks}, "feedback": "<Detailed analysis of marks awarded and justification>"}}
+Required Output JSON format (array of objects):
+[
+  {{"question_id": "1", "marks_awarded": 2, "feedback": "Awarded 2/2 marks: ..."}}
+]
 """
-
-
-def _grade_single_question(config: Any, q: Question, answer: Answer | None) -> GradingResult:
-    if not answer or not answer.text.strip():
-        return GradingResult(
-            question_id=q.id,
-            marks_awarded=0,
-            max_marks=q.max_marks,
-            feedback=f"Awarded 0/{q.max_marks} marks: Question was not answered.",
-            is_correct=False,
-        )
-
-    prompt = GRADING_PROMPT_TEMPLATE.format(
-        question_id=q.id,
-        question_text=q.text,
-        max_marks=q.max_marks,
-        answer_text=answer.text,
-    )
-    try:
-        response = _generate_content_with_retry(None, contents=prompt, config=config)
-        data = _clean_and_parse_json(response.text)
-        try:
-            awarded = int(float(data.get("marks_awarded", 0)))
-        except (ValueError, TypeError):
-            awarded = 0
-
-        feedback = str(data.get("feedback", "")).strip()
-        if not feedback:
-            feedback = f"Awarded {awarded}/{q.max_marks} marks."
-
-        is_correct = (awarded == q.max_marks) if q.max_marks > 0 else None
-        return GradingResult(
-            question_id=q.id,
-            marks_awarded=awarded,
-            max_marks=q.max_marks,
-            feedback=feedback,
-            is_correct=is_correct,
-        )
-    except Exception:
-        return GradingResult(
-            question_id=q.id,
-            marks_awarded=0,
-            max_marks=q.max_marks,
-            feedback="AI feedback not available.",
-            is_correct=False,
-        )
 
 
 async def grade_answers_async(
     questions: list[Question], answers: list[Answer], notify_cb=None
 ) -> list[GradingResult]:
-    """Parallelized grading using asyncio tasks for 10x faster execution."""
+    """Batch grading in a single structured Gemini call for maximum speed."""
     answer_map = {a.question_id: a for a in answers if a.status == "answered"}
-    config = genai_types.GenerateContentConfig(response_mime_type="application/json")
+    
+    items_to_grade = []
+    grades_dict: dict[str, GradingResult] = {}
+    
+    for q in questions:
+        ans = answer_map.get(q.id)
+        if not ans or not ans.text.strip():
+            grades_dict[q.id] = GradingResult(
+                question_id=q.id,
+                marks_awarded=0,
+                max_marks=q.max_marks,
+                feedback=f"Awarded 0/{q.max_marks} marks: Question was not answered.",
+                is_correct=False,
+            )
+        else:
+            items_to_grade.append({
+                "question_id": q.id,
+                "question_text": q.text,
+                "max_marks": q.max_marks,
+                "student_answer": ans.text,
+            })
 
-    grades: list[GradingResult] = []
-    total = len(questions)
+    if notify_cb:
+        await notify_cb("Grading answers with AI…", 85)
 
-    # Process in parallel batches of 5
-    batch_size = 5
-    for i in range(0, total, batch_size):
-        batch_q = questions[i:i + batch_size]
-        loop = asyncio.get_event_loop()
+    if items_to_grade:
+        prompt = BATCH_GRADING_PROMPT.format(items_json=json.dumps(items_to_grade, indent=2))
+        config = genai_types.GenerateContentConfig(response_mime_type="application/json")
+        try:
+            loop = asyncio.get_event_loop()
+            response = await loop.run_in_executor(
+                None, _generate_content_with_retry, None, prompt, config
+            )
+            raw_grades = _clean_and_parse_json(response.text)
+            for item in raw_grades:
+                qid = str(item.get("question_id", "")).strip()
+                if not qid:
+                    continue
+                q_obj = next((q for q in questions if q.id == qid), None)
+                max_m = q_obj.max_marks if q_obj else 0
+                try:
+                    awarded = int(float(item.get("marks_awarded", 0)))
+                except (ValueError, TypeError):
+                    awarded = 0
+                feedback = str(item.get("feedback", "")).strip() or f"Awarded {awarded}/{max_m} marks."
+                is_correct = (awarded == max_m) if max_m > 0 else None
+                grades_dict[qid] = GradingResult(
+                    question_id=qid,
+                    marks_awarded=awarded,
+                    max_marks=max_m,
+                    feedback=feedback,
+                    is_correct=is_correct,
+                )
+        except Exception:
+            for item in items_to_grade:
+                qid = item["question_id"]
+                if qid not in grades_dict:
+                    grades_dict[qid] = GradingResult(
+                        question_id=qid,
+                        marks_awarded=0,
+                        max_marks=item["max_marks"],
+                        feedback="AI feedback not available.",
+                        is_correct=False,
+                    )
 
-        tasks = [
-            loop.run_in_executor(None, _grade_single_question, config, q, answer_map.get(q.id))
-            for q in batch_q
-        ]
-        results = await asyncio.gather(*tasks)
-        grades.extend(results)
+    # Ensure all questions have a result
+    for q in questions:
+        if q.id not in grades_dict:
+            grades_dict[q.id] = GradingResult(
+                question_id=q.id,
+                marks_awarded=0,
+                max_marks=q.max_marks,
+                feedback="AI feedback not available.",
+                is_correct=False,
+            )
 
-        if notify_cb:
-            pct = 80 + int((len(grades) / total) * 18)
-            await notify_cb(f"Grading question {len(grades)} of {total}…", pct)
+    if notify_cb:
+        await notify_cb("Finalizing evaluation…", 95)
 
-    return grades
+    return [grades_dict[q.id] for q in questions]
 
 
 # ---------------------------------------------------------------------------
