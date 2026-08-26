@@ -238,34 +238,36 @@ def _parse_bbox(bbox_data: Any, page: int) -> BoundingBox | None:
 def extract_answers(answer_images: list[Image.Image], questions: list[Question] = None) -> list[Answer]:
     q_context = ""
     if questions:
-        q_summary = "\n".join([f"- ID '{q.id}': {q.text[:120]} (Max Marks: {q.max_marks})" for q in questions])
-        q_context = f"\nTarget Questions from Question Paper:\n{q_summary}\n"
+        q_summary = "\n".join([f"- Question {q.id}: \"{q.text[:100]}\" ({q.max_marks} marks)" for q in questions])
+        q_context = f"\nList of Expected Question IDs from Question Paper:\n{q_summary}\n"
 
     prompt = f"""
-You are an expert at reading handwritten student answer sheets.
+You are an expert OCR and document understanding engine for handwritten student exam papers.
 
-Analyze the provided image(s) of a handwritten answer sheet. Each image represents one page
-(page index starts at 0, in the order provided).
+Analyze the handwritten answer sheet image(s). Each image is one page (page index starts at 0).
 {q_context}
-For each student answer visible on the page:
-1. Match it to the corresponding Question ID from the Target Questions list (e.g. "1", "2", "5", "11a").
-   Look for question numbers written by the student (like "1.", "Q1", "Ans 1", "1 (C)", etc.).
-2. Transcribe the answer text accurately.
-3. Provide the bounding box surrounding the entire written answer region on that page as normalized coordinates [x0, y0, x1, y1]
-   where (0,0) is top-left corner and (1,1) is bottom-right corner of the page image.
-4. Include the 0-indexed page number (0 = first image, 1 = second image, etc.).
+DETECTION RULES:
+1. Identify every handwritten answer on each page by looking at the leading question number written by the student (e.g. "1.", "2.", "3.", "4.", "Q5", "11 a.", etc.).
+2. The `question_id` MUST match the leading question number written by the student (e.g., answer starting with "1." is question_id "1", answer starting with "2." is question_id "2", answer starting with "3." is question_id "3"). Do NOT skip or offset any numbers.
+3. Transcribe the full answer text written on that line/section (including option letter and written text).
+4. Provide the exact normalized bounding box [x0, y0, x1, y1] for that specific answer region:
+   - x0 (left), y0 (top), x1 (right), y1 (bottom) as floats between 0.0 and 1.0.
+   - y0 must be the top of the text line, y1 must be the bottom of that text line.
+   - Do NOT overlap the bounding box of question 2 with question 3. Each answer must have its own tight, accurate box.
 
-Rules:
-- Match each answer to its correct Question ID from the question paper list whenever possible.
-- Return ONLY valid JSON, no markdown fences, no explanation.
-
-Output format (JSON array):
+Output format (strict JSON array of objects):
 [
   {{
     "question_id": "1",
     "text": "(C) Increased risk of cross-contamination",
     "page": 0,
-    "bbox": {{"x0": 0.05, "y0": 0.10, "x1": 0.95, "y1": 0.15}}
+    "bbox": {{"x0": 0.50, "y0": 0.46, "x1": 0.88, "y1": 0.50}}
+  }},
+  {{
+    "question_id": "2",
+    "text": "(C) Listing all the activities",
+    "page": 0,
+    "bbox": {{"x0": 0.50, "y0": 0.51, "x1": 0.80, "y1": 0.55}}
   }}
 ]
 """

@@ -27,15 +27,28 @@ export default function AnswerSheetViewer({
   const containerRef = useRef<HTMLDivElement>(null);
   const imgRef = useRef<HTMLImageElement>(null);
 
-  // When selected question changes, jump to page & center view
+  // When selected question changes, jump to page & smoothly center on the answer box
   useEffect(() => {
     if (selectedAnswers.length > 0 && selectedAnswers[0].bbox) {
-      const targetPage = selectedAnswers[0].bbox.page;
-      setCurrentPage(targetPage);
-      // Reset pan on selection for a clean view
-      setPan({ x: 0, y: 0 });
+      const bbox = selectedAnswers[0].bbox;
+      setCurrentPage(bbox.page);
+
+      // Auto-focus on the target bounding box rather than throwing view to top (0,0)
+      if (imgRef.current && containerRef.current) {
+        const containerH = containerRef.current.clientHeight;
+        const imgH = imgRef.current.clientHeight;
+        const currentZoom = zoom / 100;
+
+        const bboxCenterY = ((bbox.y0 + bbox.y1) / 2) * imgH;
+        const targetPanY = (containerH / 2) - (bboxCenterY * currentZoom);
+
+        setPan((prev) => ({
+          x: prev.x, // Preserve user's horizontal position
+          y: Math.round(targetPanY),
+        }));
+      }
     }
-  }, [selectedAnswers]);
+  }, [selectedAnswers, zoom]);
 
   const imageUrl = `${apiBase}/api/page-image/${sessionId}/answer/${currentPage}`;
   const answersOnPage = selectedAnswers.filter((a) => a.bbox?.page === currentPage);
