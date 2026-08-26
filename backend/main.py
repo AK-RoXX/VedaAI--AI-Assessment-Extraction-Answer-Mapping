@@ -6,9 +6,13 @@ import io
 import uuid
 import asyncio
 from typing import Any
+# pyrefly: ignore [missing-import]
 from fastapi import FastAPI, File, UploadFile, HTTPException
+# pyrefly: ignore [missing-import]
 from fastapi.middleware.cors import CORSMiddleware
+# pyrefly: ignore [missing-import]
 from fastapi.responses import StreamingResponse, Response
+# pyrefly: ignore [missing-import]
 from PIL import Image
 
 from models import UploadResponse, ProcessingStatus, ProcessingResult

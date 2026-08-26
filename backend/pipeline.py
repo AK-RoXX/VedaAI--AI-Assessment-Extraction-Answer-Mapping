@@ -12,10 +12,15 @@ import time
 import asyncio
 import urllib.request
 from typing import Any
+# pyrefly: ignore [missing-import]
 import pymupdf  # PyMuPDF
+# pyrefly: ignore [missing-import]
 from PIL import Image
+# pyrefly: ignore [missing-import]
 from dotenv import load_dotenv
+# pyrefly: ignore [missing-import]
 from google import genai
+# pyrefly: ignore [missing-import]
 from google.genai import types as genai_types
 from models import Question, Answer, BoundingBox, GradingResult, ProcessingResult
 
