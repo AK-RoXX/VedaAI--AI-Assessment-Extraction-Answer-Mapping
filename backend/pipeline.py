@@ -204,10 +204,13 @@ def _parse_bbox(bbox_data: Any, page: int) -> BoundingBox | None:
         return None
     try:
         if isinstance(bbox_data, dict):
-            x0 = float(bbox_data.get("x0", bbox_data.get("xmin", bbox_data.get("left", 0))))
-            y0 = float(bbox_data.get("y0", bbox_data.get("ymin", bbox_data.get("top", 0))))
-            x1 = float(bbox_data.get("x1", bbox_data.get("xmax", bbox_data.get("right", 1))))
-            y1 = float(bbox_data.get("y1", bbox_data.get("ymax", bbox_data.get("bottom", 1))))
+            if "box_2d" in bbox_data and isinstance(bbox_data["box_2d"], (list, tuple)) and len(bbox_data["box_2d"]) == 4:
+                y0, x0, y1, x1 = [float(v) for v in bbox_data["box_2d"]]
+            else:
+                x0 = float(bbox_data.get("x0", bbox_data.get("xmin", bbox_data.get("left", 0))))
+                y0 = float(bbox_data.get("y0", bbox_data.get("ymin", bbox_data.get("top", 0))))
+                x1 = float(bbox_data.get("x1", bbox_data.get("xmax", bbox_data.get("right", 1))))
+                y1 = float(bbox_data.get("y1", bbox_data.get("ymax", bbox_data.get("bottom", 1))))
         elif isinstance(bbox_data, (list, tuple)) and len(bbox_data) == 4:
             y0, x0, y1, x1 = [float(v) for v in bbox_data]
         else:
@@ -222,13 +225,8 @@ def _parse_bbox(bbox_data: Any, page: int) -> BoundingBox | None:
 
         x0 = max(0.0, min(1.0, x0))
         y0 = max(0.0, min(1.0, y0))
-        x1 = max(x0, min(1.0, x1))
-        y1 = max(y0, min(1.0, y1))
-
-        if (y1 - y0) < 0.02:
-            y1 = min(1.0, y0 + 0.04)
-        if (x1 - x0) < 0.05:
-            x1 = min(1.0, x0 + 0.6)
+        x1 = max(x0 + 0.01, min(1.0, x1))
+        y1 = max(y0 + 0.01, min(1.0, y1))
 
         return BoundingBox(x0=round(x0, 4), y0=round(y0, 4), x1=round(x1, 4), y1=round(y1, 4), page=page)
     except Exception:
