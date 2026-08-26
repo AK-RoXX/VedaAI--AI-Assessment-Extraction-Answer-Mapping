@@ -43,6 +43,12 @@ sessions: dict[str, dict[str, Any]] = {}
 # Routes
 # ---------------------------------------------------------------------------
 
+@app.get("/")
+@app.head("/")
+async def root():
+    return {"status": "ok", "message": "VedaAI API is running"}
+
+
 @app.get("/health")
 @app.get("/healthz")
 async def health():
