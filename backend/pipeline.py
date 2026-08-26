@@ -22,8 +22,8 @@ from models import Question, Answer, BoundingBox, GradingResult, ProcessingResul
 ENV_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
 load_dotenv(dotenv_path=ENV_PATH, override=True)
 
-MODEL_ID = "gemini-3.6-flash"
-FALLBACK_MODELS = ["gemini-3.6-flash", "gemini-2.5-flash"]
+MODEL_ID = "gemini-2.5-flash"
+FALLBACK_MODELS = ["gemini-2.5-flash", "gemini-3.6-flash"]
 DPI = 120
 
 
@@ -67,24 +67,18 @@ def _generate_content_with_retry(client: genai.Client | None, contents: Any, con
     api_keys = _get_api_keys()
     last_error = None
 
-    for attempt in range(2):
-        for key in api_keys:
-            try:
-                active_client = genai.Client(api_key=key)
-                for model in FALLBACK_MODELS:
-                    try:
-                        return active_client.models.generate_content(model=model, contents=contents, config=config)
-                    except Exception as e:
-                        last_error = e
-                        err_str = str(e)
-                        if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str or "503" in err_str or "UNAVAILABLE" in err_str:
-                            time.sleep(1.5)
-                            continue
-                        else:
-                            raise e
-            except Exception as e:
-                last_error = e
-                continue
+    for key in api_keys:
+        try:
+            active_client = genai.Client(api_key=key)
+            for model in FALLBACK_MODELS:
+                try:
+                    return active_client.models.generate_content(model=model, contents=contents, config=config)
+                except Exception as e:
+                    last_error = e
+                    continue
+        except Exception as e:
+            last_error = e
+            continue
 
     # Fallback to OpenRouter text model if contents is text prompt
     if isinstance(contents, str) or (isinstance(contents, list) and len(contents) > 0 and isinstance(contents[0], str)):
