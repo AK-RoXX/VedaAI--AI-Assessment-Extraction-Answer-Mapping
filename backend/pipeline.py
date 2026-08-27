@@ -11,6 +11,7 @@ import re
 import time
 import asyncio
 import urllib.request
+import logging
 from typing import Any
 # pyrefly: ignore [missing-import]
 import pymupdf  # PyMuPDF
@@ -23,6 +24,8 @@ from google import genai
 # pyrefly: ignore [missing-import]
 from google.genai import types as genai_types
 from models import Question, Answer, BoundingBox, GradingResult, ProcessingResult
+
+logger = logging.getLogger("vedaai.pipeline")
 
 ENV_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
 load_dotenv(dotenv_path=ENV_PATH, override=True)
@@ -106,8 +109,14 @@ def _call_openrouter_fallback(
                 def __init__(self, response_text: str):
                     self.text = response_text
 
+            logger.info("OpenRouter fallback succeeded: model=%s vision=%s", model, bool(images))
             return MockResponse(text)
         except Exception as error:
+            logger.warning(
+                "OpenRouter fallback failed: model=%s error_type=%s",
+                model,
+                type(error).__name__,
+            )
             last_error = error
     if last_error:
         raise last_error
@@ -129,11 +138,26 @@ def _generate_content_with_retry(
             active_client = genai.Client(api_key=key)
             for model in FALLBACK_MODELS:
                 try:
-                    return active_client.models.generate_content(model=model, contents=contents, config=config)
+                    response = active_client.models.generate_content(
+                        model=model, contents=contents, config=config
+                    )
+                    logger.info(
+                        "Gemini request succeeded: model=%s vision=%s response_chars=%s",
+                        model,
+                        bool(vision_images),
+                        len(getattr(response, "text", "") or ""),
+                    )
+                    return response
                 except Exception as e:
+                    logger.warning(
+                        "Gemini request failed: model=%s error_type=%s",
+                        model,
+                        type(e).__name__,
+                    )
                     last_error = e
                     continue
         except Exception as e:
+            logger.warning("Gemini client setup failed: error_type=%s", type(e).__name__)
             last_error = e
             continue
 
@@ -153,6 +177,10 @@ def _generate_content_with_retry(
             last_error = fallback_error
 
     if last_error:
+        logger.error(
+            "All configured AI providers failed: final_error_type=%s",
+            type(last_error).__name__,
+        )
         raise last_error
     raise RuntimeError(
         "No AI provider is configured. Set GEMINI_API_KEY in backend/.env."
@@ -321,6 +349,7 @@ def extract_questions(question_images: list[Image.Image]) -> list[Question]:
         None, contents=parts, config=config, vision_images=question_images
     )
     raw_text = getattr(response, "text", "") or ""
+    logger.info("Question extraction response chars=%s", len(raw_text))
     data = _clean_and_parse_json(raw_text)
     
     questions = []

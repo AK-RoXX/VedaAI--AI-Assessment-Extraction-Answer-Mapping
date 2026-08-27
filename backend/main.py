@@ -6,6 +6,7 @@ import io
 import uuid
 import asyncio
 import os
+import logging
 from typing import Any
 # pyrefly: ignore [missing-import]
 from fastapi import FastAPI, File, UploadFile, HTTPException
@@ -18,6 +19,8 @@ from PIL import Image
 
 from models import UploadResponse, ProcessingStatus, ProcessingResult
 from pipeline import run_pipeline, document_to_images, image_to_bytes
+
+logger = logging.getLogger("vedaai.api")
 
 app = FastAPI(title="VedaAI Backend", version="1.0.0")
 
@@ -160,6 +163,7 @@ async def process_session(session_id: str):
                 session["status"] = done_status
                 await queue.put(done_status.model_dump_json())
             except Exception:
+                logger.exception("Document processing failed for session=%s", session_id)
                 err_status = ProcessingStatus(
                     session_id=session_id,
                     status="error",
