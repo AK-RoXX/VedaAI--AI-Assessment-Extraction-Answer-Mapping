@@ -101,17 +101,26 @@ def _generate_content_with_retry(client: genai.Client | None, contents: Any, con
 # PDF utilities
 # ---------------------------------------------------------------------------
 
-def pdf_to_images(pdf_bytes: bytes) -> list[Image.Image]:
-    """Convert all pages of a PDF to PIL Images."""
-    doc = pymupdf.open(stream=pdf_bytes, filetype="pdf")
-    images = []
-    mat = pymupdf.Matrix(DPI / 72, DPI / 72)
-    for page in doc:
-        pix = page.get_pixmap(matrix=mat, alpha=False)
-        img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
-        images.append(img)
-    doc.close()
+def document_to_images(document_bytes: bytes, filename: str | None = None) -> list[Image.Image]:
+    """Convert a PDF or single image upload into RGB PIL images."""
+    suffix = os.path.splitext(filename or "")[1].lower()
+    is_pdf = suffix == ".pdf" or document_bytes[:5] == b"%PDF-"
+    if not is_pdf:
+        with Image.open(io.BytesIO(document_bytes)) as source:
+            return [source.convert("RGB").copy()]
+
+    images: list[Image.Image] = []
+    with pymupdf.open(stream=document_bytes, filetype="pdf") as doc:
+        mat = pymupdf.Matrix(DPI / 72, DPI / 72)
+        for page in doc:
+            pix = page.get_pixmap(matrix=mat, alpha=False)
+            images.append(Image.frombytes("RGB", [pix.width, pix.height], pix.samples))
     return images
+
+
+# Kept as a small compatibility wrapper for callers that already pass PDFs.
+def pdf_to_images(pdf_bytes: bytes) -> list[Image.Image]:
+    return document_to_images(pdf_bytes, "document.pdf")
 
 
 def image_to_base64(img: Image.Image, fmt: str = "JPEG") -> str:
@@ -436,7 +445,11 @@ async def grade_answers_async(
             )
             raw_grades = _clean_and_parse_json(response.text)
             for item in raw_grades:
-                qid = str(item.get("question_id", "")).strip()
+                raw_qid = str(item.get("question_id", "")).strip()
+                qid = next(
+                    (q.id for q in questions if _normalize_id(q.id) == _normalize_id(raw_qid)),
+                    raw_qid,
+                )
                 if not qid:
                     continue
                 q_obj = next((q for q in questions if q.id == qid), None)
@@ -445,6 +458,7 @@ async def grade_answers_async(
                     awarded = int(float(item.get("marks_awarded", 0)))
                 except (ValueError, TypeError):
                     awarded = 0
+                awarded = max(0, min(max_m, awarded))
                 feedback = str(item.get("feedback", "")).strip() or f"Awarded {awarded}/{max_m} marks."
                 is_correct = (awarded == max_m) if max_m > 0 else None
                 grades_dict[qid] = GradingResult(
@@ -491,6 +505,8 @@ async def run_pipeline(
     session_id: str,
     question_bytes: bytes,
     answer_bytes: bytes,
+    question_filename: str | None = None,
+    answer_filename: str | None = None,
     progress_callback=None,
 ) -> ProcessingResult:
     """
@@ -503,8 +519,8 @@ async def run_pipeline(
             await progress_callback(step, pct)
 
     await _notify("Converting PDFs to images…", 5)
-    question_images = pdf_to_images(question_bytes)
-    answer_images = pdf_to_images(answer_bytes)
+    question_images = await asyncio.to_thread(document_to_images, question_bytes, question_filename)
+    answer_images = await asyncio.to_thread(document_to_images, answer_bytes, answer_filename)
 
     if not question_images:
         raise ValueError("Question paper PDF could not be converted or contains 0 pages.")
@@ -512,12 +528,12 @@ async def run_pipeline(
         raise ValueError("Answer sheet PDF could not be converted or contains 0 pages.")
 
     await _notify("Extracting questions from question paper…", 20)
-    questions = extract_questions(question_images)
+    questions = await asyncio.to_thread(extract_questions, question_images)
     if not questions:
         raise ValueError("No readable questions could be extracted from the question paper.")
 
     await _notify("Extracting answers from answer sheet…", 50)
-    answers = extract_answers(answer_images, questions)
+    answers = await asyncio.to_thread(extract_answers, answer_images, questions)
 
     await _notify("Mapping answers to questions…", 70)
     answers = map_answers_to_questions(questions, answers)

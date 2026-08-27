@@ -5,6 +5,7 @@ VedaAI FastAPI Backend
 import io
 import uuid
 import asyncio
+import os
 from typing import Any
 # pyrefly: ignore [missing-import]
 from fastapi import FastAPI, File, UploadFile, HTTPException
@@ -16,14 +17,21 @@ from fastapi.responses import StreamingResponse, Response
 from PIL import Image
 
 from models import UploadResponse, ProcessingStatus, ProcessingResult
-from pipeline import run_pipeline, pdf_to_images, image_to_bytes
+from pipeline import run_pipeline, document_to_images, image_to_bytes
 
 app = FastAPI(title="VedaAI Backend", version="1.0.0")
 
-# Allow Next.js dev server and production origins
+ALLOWED_ORIGINS = [
+    origin.strip()
+    for origin in os.getenv(
+        "CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000"
+    ).split(",")
+    if origin.strip()
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000", "*"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -90,6 +98,7 @@ async def upload_files(
             progress=0,
         ),
         "result": None,
+        "processing_task": None,
     }
     return UploadResponse(session_id=session_id, message="Files uploaded successfully.")
 
@@ -129,12 +138,18 @@ async def process_session(session_id: str):
                     session_id=session_id,
                     question_bytes=session["question_bytes"],
                     answer_bytes=session["answer_bytes"],
+                    question_filename=session["question_filename"],
+                    answer_filename=session["answer_filename"],
                     progress_callback=progress_callback,
                 )
                 session["result"] = result
                 # Pre-render page images
-                session["question_images"] = pdf_to_images(session["question_bytes"])
-                session["answer_images"] = pdf_to_images(session["answer_bytes"])
+                session["question_images"] = await asyncio.to_thread(
+                    document_to_images, session["question_bytes"], session["question_filename"]
+                )
+                session["answer_images"] = await asyncio.to_thread(
+                    document_to_images, session["answer_bytes"], session["answer_filename"]
+                )
 
                 done_status = ProcessingStatus(
                     session_id=session_id,
@@ -157,7 +172,9 @@ async def process_session(session_id: str):
             finally:
                 await queue.put(None)  # Sentinel
 
-        asyncio.create_task(run())
+        task = session.get("processing_task")
+        if task is None or task.done():
+            session["processing_task"] = asyncio.create_task(run())
 
         while True:
             item = await queue.get()
@@ -199,7 +216,9 @@ async def get_page_image(session_id: str, doc: str, page: int):
     if not images:
         # Lazy render
         key = "answer_bytes" if doc == "answer" else "question_bytes"
-        images = pdf_to_images(session[key])
+        images = await asyncio.to_thread(
+            document_to_images, session[key], session.get(f"{doc}_filename")
+        )
         session[f"{doc}_images"] = images
 
     if page < 0 or page >= len(images):
