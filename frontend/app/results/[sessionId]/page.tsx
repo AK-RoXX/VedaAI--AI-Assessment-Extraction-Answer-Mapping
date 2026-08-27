@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Sidebar from "@/components/Sidebar";
 import QuestionList from "@/components/QuestionList";
@@ -37,16 +37,20 @@ export default function ResultsPage() {
   }, [sessionId]);
 
   // Find all answer segments for the selected question
-  const selectedAnswers: Answer[] =
-    data?.answers.filter(
+  const selectedAnswers: Answer[] = useMemo(
+    () => data?.answers.filter(
       (a) => a.question_id === selectedQuestionId && a.status === "answered" && a.bbox
-    ) ?? [];
+    ) ?? [],
+    [data?.answers, selectedQuestionId]
+  );
 
   // Compute summary totals
-  const totalAwarded = data?.grades.reduce((s, g) => s + g.marks_awarded, 0) ?? 0;
-  const totalMax = data?.grades.reduce((s, g) => s + g.max_marks, 0) ?? 0;
-  const answeredCount = data?.answers.filter((a) => a.status === "answered").length ?? 0;
-  const totalQuestions = data?.questions.length ?? 0;
+  const { totalAwarded, totalMax, answeredCount, totalQuestions } = useMemo(() => ({
+    totalAwarded: data?.grades.reduce((s, g) => s + g.marks_awarded, 0) ?? 0,
+    totalMax: data?.grades.reduce((s, g) => s + g.max_marks, 0) ?? 0,
+    answeredCount: data?.answers.filter((a) => a.status === "answered").length ?? 0,
+    totalQuestions: data?.questions.length ?? 0,
+  }), [data]);
 
   return (
     <div className="app-shell">

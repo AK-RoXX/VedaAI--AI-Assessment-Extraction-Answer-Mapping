@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Question, Answer, GradingResult } from "@/lib/types";
 import styles from "./QuestionList.module.css";
 
@@ -44,8 +44,14 @@ export default function QuestionList({
 }: QuestionListProps) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
-  const answerMap = Object.fromEntries(answers.map((a) => [a.question_id, a]));
-  const gradeMap = Object.fromEntries(grades.map((g) => [g.question_id, g]));
+  const answerMap = useMemo(
+    () => new Map(answers.map((a) => [a.question_id, a])),
+    [answers]
+  );
+  const gradeMap = useMemo(
+    () => new Map(grades.map((g) => [g.question_id, g])),
+    [grades]
+  );
 
   const toggleExpand = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -67,8 +73,8 @@ export default function QuestionList({
       {/* Questions list */}
       <div className={styles.list}>
         {questions.map((q, idx) => {
-          const answer = answerMap[q.id];
-          const grade = gradeMap[q.id];
+          const answer = answerMap.get(q.id);
+          const grade = gradeMap.get(q.id);
           const isSelected = selectedQuestionId === q.id;
           const isExpanded = expanded.has(q.id);
           const awarded = grade?.marks_awarded ?? 0;

@@ -21,16 +21,24 @@ export default function ProcessingPage() {
   const [displayProgress, setDisplayProgress] = useState(5);
   const [error, setError] = useState<string | null>(null);
   const tickerRef = useRef<NodeJS.Timeout | null>(null);
+  const displayProgressRef = useRef(displayProgress);
 
-  // Smooth progress bar interpolator ticker
   useEffect(() => {
-    if (status.progress > displayProgress) {
-      setDisplayProgress(status.progress);
-    }
+    displayProgressRef.current = displayProgress;
+  }, [displayProgress]);
 
+  // Apply server progress immediately when a new stage arrives.
+  useEffect(() => {
+    if (status.progress <= displayProgressRef.current) return;
+    const timer = setTimeout(() => setDisplayProgress(status.progress), 0);
+    return () => clearTimeout(timer);
+  }, [status.progress]);
+
+  // Smoothly advance within the current stage without recreating the timer
+  // on every tick.
+  useEffect(() => {
     // Auto-advance ticker slowly while in a step (prevents bar from looking stuck)
-    if (status.status === "processing" && displayProgress < 95) {
-      if (tickerRef.current) clearInterval(tickerRef.current);
+    if (status.status === "processing" && displayProgressRef.current < 95) {
       tickerRef.current = setInterval(() => {
         setDisplayProgress((prev) => {
           // Limit simulated advance to max +15% past target status progress
@@ -45,7 +53,7 @@ export default function ProcessingPage() {
     return () => {
       if (tickerRef.current) clearInterval(tickerRef.current);
     };
-  }, [status, displayProgress]);
+  }, [status.status, status.progress]);
 
   useEffect(() => {
     if (!sessionId) return;

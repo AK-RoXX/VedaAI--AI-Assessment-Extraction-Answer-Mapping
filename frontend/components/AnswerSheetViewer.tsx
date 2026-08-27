@@ -31,22 +31,20 @@ export default function AnswerSheetViewer({
   useEffect(() => {
     if (selectedAnswers.length > 0 && selectedAnswers[0].bbox) {
       const bbox = selectedAnswers[0].bbox;
-      setCurrentPage(bbox.page);
+      const timer = setTimeout(() => {
+        setCurrentPage(bbox.page);
 
-      // Auto-focus on the target bounding box rather than throwing view to top (0,0)
-      if (imgRef.current && containerRef.current) {
-        const containerH = containerRef.current.clientHeight;
-        const imgH = imgRef.current.clientHeight;
-        const currentZoom = zoom / 100;
-
-        const bboxCenterY = ((bbox.y0 + bbox.y1) / 2) * imgH;
-        const targetPanY = (containerH / 2) - (bboxCenterY * currentZoom);
-
-        setPan((prev) => ({
-          x: prev.x, // Preserve user's horizontal position
-          y: Math.round(targetPanY),
-        }));
-      }
+        // Auto-focus on the target bounding box rather than throwing view to top (0,0)
+        if (imgRef.current && containerRef.current) {
+          const containerH = containerRef.current.clientHeight;
+          const imgH = imgRef.current.clientHeight;
+          const currentZoom = zoom / 100;
+          const bboxCenterY = ((bbox.y0 + bbox.y1) / 2) * imgH;
+          const targetPanY = (containerH / 2) - (bboxCenterY * currentZoom);
+          setPan((prev) => ({ x: prev.x, y: Math.round(targetPanY) }));
+        }
+      }, 0);
+      return () => clearTimeout(timer);
     }
   }, [selectedAnswers, zoom]);
 
