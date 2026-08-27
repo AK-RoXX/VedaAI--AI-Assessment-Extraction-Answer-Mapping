@@ -49,6 +49,10 @@ GEMINI_API_KEY=your_gemini_api_key
 CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
 # Optional text-only fallback
 OPEN_ROUTER_API_KEY=your_openrouter_key
+# Public frontend URL used for OpenRouter app attribution
+OPENROUTER_SITE_URL=https://your-frontend-service.onrender.com
+# Optional free vision fallback chain (images are sent to these models)
+OPENROUTER_VISION_MODELS=qwen/qwen2.5-vl-72b-instruct:free,google/gemma-3-27b-it:free,google/gemma-3-12b-it:free,qwen/qwen2.5-vl-7b-instruct:free
 ```
 
 Start the API from the `backend` directory:
