@@ -5,10 +5,18 @@ VedaAI is an AI-assisted teacher tool for reviewing handwritten exam answers. Up
 ## Features
 
 - Upload PDF or image files (10 MB per file).
+![VedaAI upload interface](documents/upload%20feature.png)
+
 - Extract questions in printed order, including labelled sub-parts.
+![VedaAI question extracted](documents/answer%20extracted.png)
+
 - Detect answers written out of order, unanswered questions, and unmatched answers.
+
 - Highlight answer regions on the answer-sheet page.
+![VedaAI upload interface](documents/answer%20page.png)
+
 - Grade extracted answers with Gemini and stream processing progress over SSE.
+
 - Support answers spanning multiple answer-sheet pages.
 
 ## Architecture
