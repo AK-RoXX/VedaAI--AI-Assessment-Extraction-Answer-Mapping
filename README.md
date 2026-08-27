@@ -1,168 +1,112 @@
-# VedaAI – AI Teacher's Toolkit
+# VedaAI
 
-VedaAI is a full-stack web application designed for educators to upload exam question papers alongside student handwritten answer sheets. VedaAI automatically extracts questions, transcribes handwritten answers, maps answers to respective questions, highlights exact answer regions on the answer sheet image and provides automated scoring with AI Analysis and feedback.
+VedaAI is an AI-assisted teacher tool for reviewing handwritten exam answers. Upload a question paper and one answer sheet, then inspect extracted questions, mapped answers, marks, feedback, and highlighted answer regions.
 
----
+## Features
 
-## 🏗️ Architecture & Folder Structure
+- Upload PDF or image files (10 MB per file).
+- Extract questions in printed order, including labelled sub-parts.
+- Detect answers written out of order, unanswered questions, and unmatched answers.
+- Highlight answer regions on the answer-sheet page.
+- Grade extracted answers with Gemini and stream processing progress over SSE.
+- Support answers spanning multiple answer-sheet pages.
 
-The project is structured into two main directories: `frontend` (Next.js 14) and `backend` (Python FastAPI).
+## Architecture
 
-```
-VedaAI/
-├── frontend/                     # Next.js 14 App Router (Frontend)
-│   ├── app/
-│   │   ├── page.tsx              # Step 1: Upload Question Paper & Answer Sheet
-│   │   ├── processing/
-│   │   │   └── [sessionId]/
-│   │   │       └── page.tsx      # Step 2: AI Extraction Progress Screen
-│   │   └── results/
-│   │       └── [sessionId]/
-│   │           └── page.tsx      # Step 3: Interactive Split-View (Questions + Sheet Viewer)
-│   ├── components/               # Custom UI Components 
-│   ├── lib/                      # TypeScript definitions & API helper
-│   ├── .env.local                # Frontend environment configuration
-│   └── package.json
-│
-├── backend/                      # Python FastAPI (Backend)
-│   ├── main.py                   # FastAPI REST & SSE endpoints
-│   ├── pipeline.py               # AI Extraction, Mapping & Grading engine (Gemini API)
-│   ├── models.py                 # Pydantic data schemas
-│   ├── requirements.txt          # Python dependencies
-│   └── .env.example              # Sample environment file for Gemini API Key
-│
-├── Context.md                    # Project requirements and specification
-├── README.md                     # Project documentation and setup guide
-└── Screenshots/                  # Design reference screenshots
+```text
+frontend/   Next.js App Router, React, TypeScript, CSS Modules
+backend/    FastAPI, PyMuPDF, Pillow, Gemini API
+documents/  Sample input documents
 ```
 
----
+The backend keeps sessions in memory. Restarting the backend removes uploaded files and results; no database or authentication is currently used.
 
-## 🛠️ Tech Stack
+## Requirements
 
-| Layer | Technology | Key Modules / Libraries |
-|-------|-----------|------------------------|
-| **Frontend** | Next.js 14 (App Router), React 18, TypeScript | CSS Modules, Vanilla CSS Design System, SVG Animations |
-| **Backend** | Python 3.10+ / 3.13, FastAPI, Uvicorn | `google-genai` (Gemini 2.0/1.5), `pymupdf`, `pillow`, `pydantic` |
-| **AI Model** | Google Gemini Vision & Text API | Question extraction, handwriting OCR + bbox estimation, AI grading |
-| **Communication** | REST API & Server-Sent Events (SSE) | Multipart uploads, realtime progress streaming, image server |
+- Node.js 18+
+- Python 3.10+
+- A Google Gemini API key (and optionally an OpenRouter key for text fallback)
 
----
+## Run locally
 
-## 🚀 Quick Start Guide
+### Backend
 
-### Prerequisites
-- **Node.js**: v18.0 or higher
-- **Python**: v3.10 or higher
-- **Gemini API Key**: Obtain a free API key from [Google AI Studio](https://aistudio.google.com/)
+```bash
+cd backend
+python -m venv .venv
 
----
+# Windows PowerShell
+.\\.venv\\Scripts\\Activate.ps1
 
-### Step 1: Backend Setup (`/backend`)
-
-1. **Navigate to the backend directory**:
-   ```bash
-   cd backend
-   ```
-
-2. **Create and activate a virtual environment**:
-   - **Windows (PowerShell/CMD)**:
-     ```bash
-     python -m venv venv
-     .\venv\Scripts\activate
-     ```
-   - **macOS / Linux**:
-     ```bash
-     python3 -m venv venv
-     source venv/bin/activate
-     ```
-
-3. **Install Python dependencies**:
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-4. **Configure Environment Variables**:
-   Create a `.env` file inside the `backend/` folder (or copy the example):
-   ```bash
-   cp .env.example .env   # macOS/Linux
-   copy .env.example .env # Windows
-   ```
-   Open `backend/.env` and add at least one valid Gemini API key. You may provide multiple keys for fallback (e.g., `GEMINI_API_KEY`, `GEMINI_API_KEY2`, `GEMINI_API_KEY_3`):
-   ```env
-   GEMINI_API_KEY=your_gemini_api_key_here
-   # Optional additional keys
-   GEMINI_API_KEY2=second_key
-   GEMINI_API_KEY_3=third_key
-   ```
-
-5. **Start the FastAPI Backend Server**:
-   ```bash
-   uvicorn main:app --reload --port 8000
-   ```
-   *The backend will run at **http://localhost:8000**.*  
----
-
-### Step 2: Frontend Setup (`/frontend`)
-
-1. **Open a new terminal and navigate to the frontend directory**:
-   ```bash
-   cd frontend
-   ```
-
-2. **Install Node dependencies**:
-   ```bash
-   npm install
-   ```
-
-3. **Configure Environment Variables**:
-   Create a `.env.local` file inside the `frontend/` folder:
-   ```env
-   NEXT_PUBLIC_API_URL=http://localhost:8000
-   ```
-
-4. **Start the Next.js Development Server**:
-   ```bash
-   npm run dev
-   ```
-   *The frontend will run at **http://localhost:3000**.*
-
----
-
-## 📑 Core Processing Flow
-
-```
-[Teacher Uploads PDF/Images] ──> POST /api/upload ──> Session Created (UUID)
-                                                             │
-[Redirect to /processing] <── SSE Stream (/api/process) <───┤
-  ├── 1. Convert PDF pages to PNG (PyMuPDF)                 │
-  ├── 2. Question Extraction (Gemini Vision)                │
-  ├── 3. Answer Handwriting OCR & Bounding Boxes            │
-  ├── 4. Question-to-Answer Mapping & Unanswered Detection    │
-  └── 5. AI Grading & Constructive Feedback                 │
-                                                             ▼
-[Redirect to /results] <── GET /api/results ───────── [Processing Done]
-  ├── Left Panel: Interactive Question List & AI Scores
-  └── Right Panel: High-Res Answer Sheet Viewer + Green Highlights
+# macOS/Linux: source .venv/bin/activate
+pip install -r requirements.txt
 ```
 
----
+Create `backend/.env`:
 
-## 📡 Backend API Endpoints Reference
+```env
+GEMINI_API_KEY=your_gemini_api_key
+CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
+# Optional text-only fallback
+OPEN_ROUTER_API_KEY=your_openrouter_key
+```
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/health` | Backend status check endpoint. |
-| `POST` | `/api/upload` | Receives `question_paper` and `answer_sheet` files (max 10MB each). Returns `session_id`. |
-| `GET` | `/api/process/{session_id}` | **Server-Sent Events (SSE)** endpoint. Streams realtime step-by-step progress and status updates. |
-| `GET` | `/api/results/{session_id}` | Retrieves final processed JSON containing extracted questions, mapped answers with bounding boxes, scores, and feedback. |
-| `GET` | `/api/page-image/{session_id}/{doc}/{page}` | Serves rendered page images (`doc`: `question` or `answer`, `page`: 0-indexed integer) as PNGs. |
-| `GET` | `/api/session-info/{session_id}` | Returns basic session info and status. |
+Start the API from the `backend` directory:
 
----
+```bash
+uvicorn main:app --reload --port 8000
+```
 
-## 💡 Highlights & Features
+### Frontend
 
-- 📸 **Exact Answer Region Highlighting**: Dynamic, scaled SVG/CSS overlays highlight answer regions directly on the handwritten answer sheet.
-- 🔢 **Order Agnostic & Sub-part Handling**: Detects questions answered out of order, and handles sub-questions (e.g. `11(a)`, `11(b)`).
-- 🚫 **Unanswered & Unmatched Answers**: Clearly marks unanswered questions and identifies student answers not matching any question.
+```bash
+cd frontend
+npm install
+```
+
+Create `frontend/.env.local`:
+
+```env
+NEXT_PUBLIC_API_URL=http://localhost:8000
+```
+
+Start the web app with `npm run dev` and open <http://localhost:3000>.
+
+## API
+
+| Method | Endpoint | Purpose |
+| --- | --- | --- |
+| GET | `/health` | Health check |
+| POST | `/api/upload` | Create a processing session |
+| GET | `/api/process/{session_id}` | SSE processing updates |
+| GET | `/api/results/{session_id}` | Final questions, answers, and grades |
+| GET | `/api/page-image/{session_id}/{doc}/{page}` | Render a page as PNG |
+| GET | `/api/session-info/{session_id}` | Session status and filenames |
+
+`doc` is `question` or `answer`; page indexes are zero-based.
+
+## Development checks
+
+```bash
+# Frontend
+cd frontend
+npm run lint
+npm run build
+
+# Backend
+cd ../backend
+python -m compileall .
+```
+
+## Processing flow
+
+```text
+Upload -> render pages -> extract questions -> extract answers
+-> map IDs -> grade -> display results and highlighted regions
+```
+
+## Limitations (features and systems that need to be handled in future but not required currently in the assessment)
+
+- Results depend on model/API quota and handwriting quality.
+- In-memory sessions are intended for local/demo use and are not durable or multi-worker safe.
+- Classroom and Library navigation items are currently placeholders.
