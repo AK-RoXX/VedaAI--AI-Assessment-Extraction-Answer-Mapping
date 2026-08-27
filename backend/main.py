@@ -159,13 +159,15 @@ async def process_session(session_id: str):
                 )
                 session["status"] = done_status
                 await queue.put(done_status.model_dump_json())
-            except Exception as e:
+            except Exception:
                 err_status = ProcessingStatus(
                     session_id=session_id,
                     status="error",
-                    step="Error during processing.",
+                    step="Processing could not be completed.",
                     progress=0,
-                    error=str(e),
+                    # Do not expose provider errors, quotas, stack traces, or
+                    # credentials-related details to the browser.
+                    error="We could not process these documents. Please try again later.",
                 )
                 session["status"] = err_status
                 await queue.put(err_status.model_dump_json())

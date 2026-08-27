@@ -41,33 +41,85 @@ def _get_api_keys() -> list[str]:
     }
     return list(keys)
 
-def _call_openrouter_fallback(prompt: str) -> str:
+OPENROUTER_VISION_MODELS = [
+    model.strip()
+    for model in os.getenv(
+        "OPENROUTER_VISION_MODELS",
+        "qwen/qwen2.5-vl-72b-instruct:free,"
+        "google/gemma-3-27b-it:free,"
+        "google/gemma-3-12b-it:free,"
+        "qwen/qwen2.5-vl-7b-instruct:free",
+    ).split(",")
+    if model.strip()
+]
+
+
+def _call_openrouter_fallback(
+    prompt: str, images: list[Image.Image] | None = None
+) -> Any:
     openrouter_key = os.getenv("OPEN_ROUTER_API_KEY", "").strip()
     if not openrouter_key:
         raise ValueError("OPEN_ROUTER_API_KEY not set")
 
     url = "https://openrouter.ai/api/v1/chat/completions"
+    # Use the public frontend URL for OpenRouter attribution. Render exposes
+    # backend and frontend as separate services, so this must be configured
+    # on the backend service rather than hard-coded to localhost.
+    app_url = (
+        os.getenv("OPENROUTER_SITE_URL")
+        or os.getenv("FRONTEND_URL")
+        or "http://localhost:3000"
+    ).strip().rstrip("/")
     headers = {
         "Authorization": f"Bearer {openrouter_key}",
         "Content-Type": "application/json",
-        "HTTP-Referer": "http://localhost:3000",
-        "X-Title": "VedaAI",
+        "HTTP-Referer": app_url,
+        "X-OpenRouter-Title": "VedaAI",
     }
-    payload = {
-        "model": "nvidia/nemotron-3.5-lightning:free",
-        "messages": [{"role": "user", "content": prompt}],
-    }
-    req = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), headers=headers)
-    with urllib.request.urlopen(req, timeout=30) as resp:
-        data = json.loads(resp.read().decode("utf-8"))
-        text = data["choices"][0]["message"]["content"]
-        class MockResponse:
-            def __init__(self, t):
-                self.text = t
-        return MockResponse(text)
+    content: Any = prompt
+    if images:
+        content = [{"type": "text", "text": prompt}]
+        for image in images:
+            content.append({
+                "type": "image_url",
+                "image_url": {
+                    "url": f"data:image/jpeg;base64,{image_to_base64(image)}"
+                },
+            })
+
+    models = OPENROUTER_VISION_MODELS if images else ["nvidia/nemotron-3.5-lightning:free"]
+    last_error = None
+    for model in models:
+        try:
+            payload = {
+                "model": model,
+                "messages": [{"role": "user", "content": content}],
+            }
+            req = urllib.request.Request(
+                url, data=json.dumps(payload).encode("utf-8"), headers=headers
+            )
+            with urllib.request.urlopen(req, timeout=60) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                text = data["choices"][0]["message"]["content"]
+
+            class MockResponse:
+                def __init__(self, response_text: str):
+                    self.text = response_text
+
+            return MockResponse(text)
+        except Exception as error:
+            last_error = error
+    if last_error:
+        raise last_error
+    raise RuntimeError("No OpenRouter fallback model is configured")
 
 
-def _generate_content_with_retry(client: genai.Client | None, contents: Any, config: Any = None):
+def _generate_content_with_retry(
+    client: genai.Client | None,
+    contents: Any,
+    config: Any = None,
+    vision_images: list[Image.Image] | None = None,
+):
     """Generate content with automatic key rotation and model fallback on quota/rate limits."""
     api_keys = _get_api_keys()
     last_error = None
@@ -85,16 +137,26 @@ def _generate_content_with_retry(client: genai.Client | None, contents: Any, con
             last_error = e
             continue
 
-    # Fallback to OpenRouter text model if contents is text prompt
-    if isinstance(contents, str) or (isinstance(contents, list) and len(contents) > 0 and isinstance(contents[0], str)):
+    # OpenRouter fallback is text-only. Never silently drop page images from a
+    # vision request: doing so produces an empty extraction that looks like a
+    # document-understanding failure.
+    is_text_only = isinstance(contents, str) or (
+        isinstance(contents, list)
+        and len(contents) > 0
+        and all(isinstance(part, str) for part in contents)
+    )
+    if is_text_only or vision_images:
         prompt_text = contents if isinstance(contents, str) else contents[0]
         try:
-            return _call_openrouter_fallback(prompt_text)
-        except Exception as or_err:
-            pass
+            return _call_openrouter_fallback(prompt_text, vision_images)
+        except Exception as fallback_error:
+            last_error = fallback_error
 
     if last_error:
         raise last_error
+    raise RuntimeError(
+        "No AI provider is configured. Set GEMINI_API_KEY in backend/.env."
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -202,6 +264,25 @@ def _clean_and_parse_json(raw: str) -> Any:
     return json.loads(raw)
 
 
+def _json_objects(data: Any) -> list[dict[str, Any]]:
+    """Return only object entries from a model response.
+
+    Models occasionally return a scalar, a wrapper object, or a mixed array
+    despite the JSON schema instruction. Ignoring malformed entries keeps one
+    bad item from crashing the entire processing session.
+    """
+    if isinstance(data, dict):
+        for key in ("questions", "answers", "grades", "items", "results"):
+            if isinstance(data.get(key), list):
+                data = data[key]
+                break
+        else:
+            data = [data]
+    if not isinstance(data, list):
+        return []
+    return [item for item in data if isinstance(item, dict)]
+
+
 def _normalize_id(s: str) -> str:
     s = str(s).strip()
     s = re.sub(r'^(question|ans|answer|q)[\.\s:]*', '', s, flags=re.IGNORECASE)
@@ -236,11 +317,14 @@ Output format (JSON array):
 def extract_questions(question_images: list[Image.Image]) -> list[Question]:
     parts: list = [QUESTION_EXTRACTION_PROMPT] + [_pil_to_part(img) for img in question_images]
     config = genai_types.GenerateContentConfig(response_mime_type="application/json")
-    response = _generate_content_with_retry(None, contents=parts, config=config)
-    data = _clean_and_parse_json(response.text)
+    response = _generate_content_with_retry(
+        None, contents=parts, config=config, vision_images=question_images
+    )
+    raw_text = getattr(response, "text", "") or ""
+    data = _clean_and_parse_json(raw_text)
     
     questions = []
-    for item in data:
+    for item in _json_objects(data):
         qid = str(item.get("id", "")).strip()
         text = str(item.get("text", "")).strip()
         raw_marks = item.get("max_marks", 0)
@@ -329,12 +413,18 @@ Output format (strict JSON array of objects):
 """
     parts: list = [prompt] + [_pil_to_part(img) for img in answer_images]
     config = genai_types.GenerateContentConfig(response_mime_type="application/json")
-    response = _generate_content_with_retry(None, contents=parts, config=config)
-    data = _clean_and_parse_json(response.text)
+    response = _generate_content_with_retry(
+        None, contents=parts, config=config, vision_images=answer_images
+    )
+    raw_text = getattr(response, "text", "") or ""
+    data = _clean_and_parse_json(raw_text)
     
     answers = []
-    for item in data:
-        page_idx = int(item.get("page", 0))
+    for item in _json_objects(data):
+        try:
+            page_idx = max(0, int(item.get("page", 0)))
+        except (TypeError, ValueError):
+            page_idx = 0
         bbox = _parse_bbox(item.get("bbox"), page=page_idx)
         answers.append(Answer(
             question_id=str(item.get("question_id", "unknown")).strip(),
@@ -444,7 +534,7 @@ async def grade_answers_async(
                 None, _generate_content_with_retry, None, prompt, config
             )
             raw_grades = _clean_and_parse_json(response.text)
-            for item in raw_grades:
+            for item in _json_objects(raw_grades):
                 raw_qid = str(item.get("question_id", "")).strip()
                 qid = next(
                     (q.id for q in questions if _normalize_id(q.id) == _normalize_id(raw_qid)),
