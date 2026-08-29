@@ -88,9 +88,21 @@
 }
 
 @media (max-width: 640px) {
+  .uploadContainer {
+    padding: 32px 16px 48px;
+    gap: 28px;
+  }
+
+  .heroTitle { font-size: clamp(24px, 7vw, 30px); }
+  .heroHighlight { padding: 2px 7px; }
+  .heroSubtitle { font-size: 14px; }
   .dropZonesRow {
     flex-direction: column;
   }
+
+  .ctaSection,
+  .startBtn { width: 100%; }
+  .ctaHint { max-width: 300px; }
 }
 
 /* Error banner */

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import styles from "./Sidebar.module.css";
 
@@ -14,19 +15,53 @@ const NAV_ITEMS = [
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const [collapsed, setCollapsed] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  useEffect(() => {
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMobileOpen(false);
+    };
+    document.addEventListener("keydown", closeOnEscape);
+    return () => document.removeEventListener("keydown", closeOnEscape);
+  }, []);
 
   // Mark Exams as active for our main flow
   const isExamsActive = pathname === "/" || pathname.startsWith("/processing") || pathname.startsWith("/results");
 
   return (
-    <aside className={styles.sidebar}>
+    <>
+      <button
+        className={styles.mobileMenuBtn}
+        onClick={() => setMobileOpen(true)}
+        aria-label="Open navigation"
+        aria-expanded={mobileOpen}
+      >
+        <MenuIcon />
+      </button>
+      {mobileOpen && (
+        <button
+          className={styles.backdrop}
+          onClick={() => setMobileOpen(false)}
+          aria-label="Close navigation"
+        />
+      )}
+    <aside className={`${styles.sidebar} ${collapsed ? styles.collapsed : ""} ${mobileOpen ? styles.mobileOpen : ""}`}>
       {/* Logo */}
       <div className={styles.logoArea}>
         <div className={styles.logoMark}>
           <span className={styles.logoV}>V</span>
         </div>
         <span className={styles.logoText}>VedaAI</span>
-        <button className={styles.collapseBtn} aria-label="Collapse sidebar">
+        <button
+          className={styles.collapseBtn}
+          onClick={() => {
+            setCollapsed((value) => !value);
+            setMobileOpen(false);
+          }}
+          aria-label={mobileOpen ? "Close navigation" : collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          aria-expanded={!collapsed}
+        >
           <CollapseIcon />
         </button>
       </div>
@@ -75,6 +110,7 @@ export default function Sidebar() {
         </div>
       </div>
     </aside>
+    </>
   );
 }
 
@@ -141,6 +177,16 @@ function CollapseIcon() {
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <rect x="3" y="3" width="18" height="18" rx="2"/>
       <path d="M9 3v18"/>
+    </svg>
+  );
+}
+
+function MenuIcon() {
+  return (
+    <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+      <line x1="4" y1="7" x2="20" y2="7" />
+      <line x1="4" y1="12" x2="20" y2="12" />
+      <line x1="4" y1="17" x2="20" y2="17" />
     </svg>
   );
 }
